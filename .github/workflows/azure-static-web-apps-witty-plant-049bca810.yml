@@ -1,3 +1,4 @@
+# Version: 1.2.1 - Triggering fresh deployment
 name: Azure Static Web Apps CI/CD
 
 on:
