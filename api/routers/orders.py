@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, UploadFile, File
 from typing import List, Optional
-import pandas as pd
+# Removed pandas to reduce package size for Azure
 import io
 import uuid
 from datetime import datetime
@@ -26,31 +26,51 @@ async def get_orders():
 async def import_order(file: UploadFile = File(...)):
     try:
         contents = await file.read()
-        df = pd.read_excel(io.BytesIO(contents))
+        import openpyxl
+        wb = openpyxl.load_workbook(io.BytesIO(contents), data_only=True)
+        sheet = wb.active
         
-        # Expected Columns check (loose check)
-        # Año, Mes, Pedido, No.Aviso, No.Equipo, No.Activo, Tipo.Mantenimiento, Nombre.Ubicación
-        required_cols = ["Pedido", "No.Aviso", "No.Equipo", "Tipo.Mantenimiento"]
-        for col in required_cols:
-            if col not in df.columns:
-                raise HTTPException(status_code=400, detail=f"Falta la columna requerida: {col}")
+        # Get headers from first row
+        headers = [str(cell.value).strip() if cell.value else "" for cell in sheet[1]]
+        
+        def get_col_idx(name):
+            try: return headers.index(name)
+            except ValueError: return -1
 
-        # Unique Orders in this file
-        order_ids = df["Pedido"].unique()
+        idx_pedido = get_col_idx("Pedido")
+        idx_aviso = get_col_idx("No.Aviso")
+        idx_equipo = get_col_idx("No.Equipo")
+        idx_tipo = get_col_idx("Tipo.Mantenimiento")
         
-        for oid in order_ids:
-            order_df = df[df["Pedido"] == oid]
-            
-            # Extract Year and Month from first row
-            first_row = order_df.iloc[0]
-            year = str(first_row.get("Año", datetime.utcnow().year))
-            month = str(first_row.get("Mes", datetime.utcnow().month))
+        if -1 in [idx_pedido, idx_aviso, idx_equipo, idx_tipo]:
+            missing = [h for i, h in enumerate(["Pedido", "No.Aviso", "No.Equipo", "Tipo.Mantenimiento"]) if [idx_pedido, idx_aviso, idx_equipo, idx_tipo][i] == -1]
+            raise HTTPException(status_code=400, detail=f"Faltan las columnas requeridas: {', '.join(missing)}")
+
+        # Process rows and group by Pedido
+        order_groups = {}
+        for row in sheet.iter_rows(min_row=2, values_only=True):
+            if not row[idx_pedido]: continue
+            oid = str(row[idx_pedido])
+            if oid not in order_groups:
+                order_groups[oid] = []
+            order_groups[oid].append(row)
+        
+        for oid, rows in order_groups.items():
+            first_row = rows[0]
+            # Flexible year/month check
+            idx_year = get_col_idx("Año")
+            idx_month = get_col_idx("Mes")
+            year = str(first_row[idx_year]) if idx_year != -1 and first_row[idx_year] else str(datetime.utcnow().year)
+            month = str(first_row[idx_month]) if idx_month != -1 and first_row[idx_month] else str(datetime.utcnow().month)
             
             # Count maintenance types
-            prev_count = len(order_df[order_df["Tipo.Mantenimiento"].str.contains("Preventivo", case=False, na=False)])
-            corr_count = len(order_df[order_df["Tipo.Mantenimiento"].str.contains("Correctivo", case=False, na=False)])
+            prev_count = 0
+            corr_count = 0
+            for r in rows:
+                m_type = str(r[idx_tipo]).lower()
+                if "preventivo" in m_type: prev_count += 1
+                if "correctivo" in m_type: corr_count += 1
             
-            # Determine overall Type
             if prev_count > 0 and corr_count > 0:
                 order_type = "Preventivo-Correctivo"
             elif corr_count > 0:
@@ -61,8 +81,8 @@ async def import_order(file: UploadFile = File(...)):
             # 1. Create/Update Order Summary
             order_data = {
                 "PartitionKey": "Orders",
-                "RowKey": str(oid),
-                "order_number": str(oid),
+                "RowKey": oid,
+                "order_number": oid,
                 "year": year,
                 "month": month,
                 "order_type": order_type,
@@ -71,31 +91,35 @@ async def import_order(file: UploadFile = File(...)):
                 "completed_count": 0,
                 "creation_date": datetime.utcnow().isoformat(),
                 "status": "Pendiente",
-                "total_assets": len(order_df),
+                "total_assets": len(rows),
                 "progress": 0
             }
-            table_service.upsert_entity("SgmOrders", order_data, "Orders", str(oid))
+            table_service.upsert_entity("SgmOrders", order_data, "Orders", oid)
             
             # 2. Create Tasks (Avisos)
-            for _, row in order_df.iterrows():
-                task_id = str(row["No.Aviso"])
+            idx_activo = get_col_idx("No.Activo") if get_col_idx("No.Activo") != -1 else get_col_idx("No. Activo")
+            idx_nombre = get_col_idx("Nombre.Equipo")
+            idx_loc = get_col_idx("Nombre.Ubicación")
+
+            for r in rows:
+                task_id = str(r[idx_aviso])
                 task_data = {
                     "PartitionKey": "Tasks",
                     "RowKey": task_id,
-                    "order_id": str(oid),
+                    "order_id": oid,
                     "year": year,
                     "month": month,
-                    "asset_id": str(row["No.Equipo"]),
-                    "asset_number": str(row.get("No. Activo") or row.get("No.Activo") or ""), # Real Activo (flexible sensing)
-                    "asset_name": str(row.get("Nombre.Equipo", row["No.Equipo"])),
-                    "location": str(row.get("Nombre.Ubicación", "Sin Ubicación")),
-                    "maintenance_type": str(row["Tipo.Mantenimiento"]),
+                    "asset_id": str(r[idx_equipo]),
+                    "asset_number": str(r[idx_activo]) if idx_activo != -1 else "",
+                    "asset_name": str(r[idx_nombre]) if idx_nombre != -1 else str(r[idx_equipo]),
+                    "location": str(r[idx_loc]) if idx_loc != -1 else "Sin Ubicación",
+                    "maintenance_type": str(r[idx_tipo]),
                     "priority": "normal",
                     "status": "pending"
                 }
                 table_service.upsert_entity(settings.AZURE_TABLE_TASKS, task_data, "Tasks", task_id)
 
-        return {"status": "success", "message": f"Importados {len(order_ids)} pedidos con éxito."}
+        return {"status": "success", "message": f"Importados {len(order_groups)} pedidos con éxito."}
     except Exception as e:
         print(f"Error importing Excel: {e}")
         raise HTTPException(status_code=500, detail=str(e))

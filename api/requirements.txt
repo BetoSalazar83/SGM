@@ -2,7 +2,6 @@ fastapi
 uvicorn
 azure-data-tables
 azure-storage-blob
-pandas
 openpyxl
 python-multipart
 python-dotenv
