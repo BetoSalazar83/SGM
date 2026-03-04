@@ -1,14 +1,14 @@
 from fastapi import FastAPI
 from datetime import datetime
 from fastapi.middleware.cors import CORSMiddleware
-from sync_routes import router as sync_router
-from routers.tasks import router as tasks_router
-from routers.orders import router as orders_router
-from routers.dashboard import router as dashboard_router
-from routers.auth import router as auth_router
-from routers.users import router as users_router
-from services.table_service import table_service
-from core.config import settings
+from .sync_routes import router as sync_router
+from .routers.tasks import router as tasks_router
+from .routers.orders import router as orders_router
+from .routers.dashboard import router as dashboard_router
+from .routers.auth import router as auth_router
+from .routers.users import router as users_router
+from .services.table_service import table_service
+from .core.config import settings
 
 import os
 

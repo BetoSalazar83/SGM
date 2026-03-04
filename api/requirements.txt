@@ -10,3 +10,4 @@ pydantic-settings
 passlib[sha256_crypt]
 python-jose[cryptography]
 gunicorn
+azure-functions
