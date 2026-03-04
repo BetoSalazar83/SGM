@@ -6,21 +6,22 @@ from models import SyncModel
 
 class AzureTableService:
     def __init__(self):
-        self.service_client = TableServiceClient.from_connection_string(conn_str=settings.AZURE_STORAGE_CONNECTION_STRING)
+        self._service_client = None
         self.users_table = settings.AZURE_TABLE_USERS
         self.tasks_table = settings.AZURE_TABLE_TASKS
         self.orders_table = "SgmOrders"
-        
-        # Ensure tables exist
-        self._create_table_if_not_exists(self.users_table)
-        self._create_table_if_not_exists(self.tasks_table)
-        self._create_table_if_not_exists(self.orders_table)
 
-    def _create_table_if_not_exists(self, table_name):
-        try:
-            self.service_client.create_table_if_not_exists(table_name)
-        except Exception as e:
-            print(f"Error creating table {table_name}: {e}")
+    @property
+    def service_client(self):
+        if self._service_client is None:
+            if settings.AZURE_STORAGE_CONNECTION_STRING == "Use_Env_Var":
+                # Fallback or dummy client for build/test if needed, 
+                # but better to let it fail only when called.
+                print("Warning: Using placeholder connection string.")
+            self._service_client = TableServiceClient.from_connection_string(
+                conn_str=settings.AZURE_STORAGE_CONNECTION_STRING
+            )
+        return self._service_client
 
     def _get_table_client(self, table_name):
         return self.service_client.get_table_client(table_name)

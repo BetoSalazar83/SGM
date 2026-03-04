@@ -6,10 +6,22 @@ from core.config import settings
 
 class AzureBlobService:
     def __init__(self):
-        self.blob_service_client = BlobServiceClient.from_connection_string(settings.AZURE_STORAGE_CONNECTION_STRING)
-        self.container_name = settings.AZURE_CONTAINER_EVIDENCE.lower() # Azure requires lowercase
-        self._create_container_if_not_exists()
-        self._configure_cors()
+        self._blob_service_client = None
+        self.container_name = settings.AZURE_CONTAINER_EVIDENCE.lower()
+
+    @property
+    def blob_service_client(self):
+        if self._blob_service_client is None:
+            self._blob_service_client = BlobServiceClient.from_connection_string(
+                settings.AZURE_STORAGE_CONNECTION_STRING
+            )
+            # Optional: initialize container/cors only once when client is first used
+            try:
+                self._create_container_if_not_exists()
+                self._configure_cors()
+            except Exception as e:
+                print(f"Lazy initialization error: {e}")
+        return self._blob_service_client
 
     def _configure_cors(self):
         try:
