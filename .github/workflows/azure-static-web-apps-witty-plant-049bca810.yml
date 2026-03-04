@@ -40,7 +40,7 @@ jobs:
           action: "upload"
           ###### Repository/Build Configurations ######
           app_location: "/frontend" 
-          api_location: "" 
+          api_location: "api" 
           output_location: "dist"
           github_id_token: ${{ steps.idtoken.outputs.result }}
           ###### End of Repository/Build Configurations ######
@@ -55,3 +55,4 @@ jobs:
         uses: Azure/static-web-apps-deploy@v1
         with:
           action: "close"
+
