@@ -1,10 +1,10 @@
 from fastapi import APIRouter, HTTPException
 from typing import List, Dict, Any
 from datetime import datetime, timedelta
-from services.table_service import table_service
-from core.config import settings
+from ..services.table_service import table_service
+from ..core.config import settings
 
-router = APIRouter(prefix="/api/dashboard", tags=["Dashboard"])
+router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
 def is_working_day(dt: datetime) -> bool:
     return dt.weekday() < 5 # 0-4 is Mon-Fri

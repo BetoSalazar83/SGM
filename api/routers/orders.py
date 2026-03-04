@@ -5,11 +5,11 @@ import io
 import uuid
 from datetime import datetime
 
-from services.table_service import table_service
-from core.config import settings
-from models import Order, Task
+from ..services.table_service import table_service
+from ..core.config import settings
+from ..models import Order, Task
 
-router = APIRouter(prefix="/api/orders", tags=["Orders"])
+router = APIRouter(prefix="/orders", tags=["Orders"])
 
 @router.get("", response_model=List[dict])
 async def get_orders():

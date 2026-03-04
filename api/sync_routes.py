@@ -1,11 +1,11 @@
 from fastapi import APIRouter, HTTPException, Depends
 from typing import List, Optional
 from datetime import datetime
-from models import Task, SyncResponse
-from services.table_service import table_service
-from core.config import settings
+from .models import Task, SyncResponse
+from .services.table_service import table_service
+from .core.config import settings
 
-router = APIRouter(prefix="/api/sync", tags=["Sync"])
+router = APIRouter(prefix="/sync", tags=["Sync"])
 
 @router.post("/push")
 async def push_changes(changes: List[Task]):
