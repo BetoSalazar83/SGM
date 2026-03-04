@@ -1,8 +1,8 @@
 from fastapi import APIRouter, HTTPException
 from typing import List, Dict, Any
 from datetime import datetime, timedelta
-from ..services.table_service import table_service
-from ..core.config import settings
+from services.table_service import table_service
+from core.config import settings
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 

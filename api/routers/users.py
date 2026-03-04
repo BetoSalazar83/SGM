@@ -1,9 +1,9 @@
 from fastapi import APIRouter, HTTPException, Depends, status
 from pydantic import BaseModel
 from typing import List, Optional
-from ..services.table_service import table_service
-from ..core.security import get_password_hash, decode_token
-from ..core.config import settings
+from services.table_service import table_service
+from core.security import get_password_hash, decode_token
+from core.config import settings
 from fastapi.security import OAuth2PasswordBearer
 
 router = APIRouter(prefix="/users", tags=["Users"])

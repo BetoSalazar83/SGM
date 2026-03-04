@@ -2,7 +2,7 @@ from azure.storage.blob import BlobServiceClient, ContentSettings
 import uuid
 import base64
 import io
-from ..core.config import settings
+from core.config import settings
 
 class AzureBlobService:
     def __init__(self):

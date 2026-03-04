@@ -1,8 +1,8 @@
 from azure.data.tables import TableServiceClient, TableEntity, UpdateMode
 from datetime import datetime
 import json
-from ..core.config import settings
-from ..models import SyncModel
+from core.config import settings
+from models import SyncModel
 
 class AzureTableService:
     def __init__(self):

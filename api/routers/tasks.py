@@ -2,10 +2,10 @@ from fastapi import APIRouter, HTTPException, Response, Request
 from typing import List, Optional
 from pydantic import BaseModel
 from datetime import datetime
-from ..services.blob_service import blob_service
-from ..models import Task
-from ..services.table_service import table_service
-from ..core.config import settings
+from services.blob_service import blob_service
+from models import Task
+from services.table_service import table_service
+from core.config import settings
 
 router = APIRouter(prefix="/tasks", tags=["Tasks"])
 

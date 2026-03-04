@@ -5,9 +5,9 @@ import io
 import uuid
 from datetime import datetime
 
-from ..services.table_service import table_service
-from ..core.config import settings
-from ..models import Order, Task
+from services.table_service import table_service
+from core.config import settings
+from models import Order, Task
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
 
