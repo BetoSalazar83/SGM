@@ -12,7 +12,7 @@ from core.config import settings
 
 import os
 
-app = FastAPI(title="SGM Backend", version="1.0.0")
+app = FastAPI(title="SGM Backend", version="1.0.0", root_path="/api")
 
 # Configurar CORS: permitir todas en dev, o una específica en prod
 cors_origins = os.getenv("CORS_ORIGINS", "*").split(",")
