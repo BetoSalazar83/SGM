@@ -6,7 +6,7 @@ openpyxl
 python-multipart
 python-dotenv
 pydantic-settings
-passlib[sha256_crypt]
+passlib
 python-jose[cryptography]
 gunicorn
 azure-functions

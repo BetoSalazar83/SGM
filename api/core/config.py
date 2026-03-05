@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 480 # 8 hours
 
     class Config:
-        env_file = os.path.join(os.path.dirname(__file__), '..', '.env')
+        env_path = os.path.join(os.path.dirname(__file__), '..', '.env')
+        env_file = env_path if os.path.exists(env_path) else None
 
 settings = Settings()
