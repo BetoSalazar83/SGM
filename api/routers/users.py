@@ -4,10 +4,9 @@ from typing import List, Optional
 from services.table_service import table_service
 from core.security import get_password_hash, decode_token
 from core.config import settings
-from fastapi.security import OAuth2PasswordBearer
+from fastapi import Header
 
 router = APIRouter(prefix="/users", tags=["Users"])
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
 
 # Modelos
 class UserBase(BaseModel):
@@ -29,7 +28,13 @@ class UserOut(UserBase):
     lastLogin: Optional[str] = None
 
 # Dependencia para obtener el usuario actual
-async def get_current_user(token: str = Depends(oauth2_scheme)):
+async def get_current_user(x_authorization: Optional[str] = Header(None)):
+    if not x_authorization or not x_authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token inválido o expirado",
+        )
+    token = x_authorization.replace("Bearer ", "")
     payload = decode_token(token)
     if not payload:
         raise HTTPException(
