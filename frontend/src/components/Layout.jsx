@@ -113,8 +113,8 @@ const Layout = () => {
 
     return (
         <div className={`app-layout ${!isAdmin ? 'no-sidebar' : ''}`}>
-            {/* Mobile Header Toggle */}
-            {isAdmin && (
+            {/* Mobile Header Toggle - Visible for admins OR on mobile screens for any user */}
+            {(isAdmin || window.innerWidth <= 768) && (
                 <button
                     className="mobile-toggle-btn"
                     onClick={() => setSidebarOpen(!isSidebarOpen)}

@@ -310,6 +310,13 @@
     z-index: 10;
 }
 
+@media (max-width: 768px) {
+    .detail-header {
+        padding-left: 4.5rem;
+        /* Space for mobile hamburger menu */
+    }
+}
+
 .back-btn {
     background: transparent;
     border: none;
