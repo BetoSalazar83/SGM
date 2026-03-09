@@ -51,8 +51,10 @@ const UploadModal = ({ isOpen, onClose, onRefresh }) => {
         formData.append('file', file);
 
         try {
+            const token = localStorage.getItem('sgm_token');
             const response = await fetch(`${API_BASE}/orders/import`, {
                 method: 'POST',
+                headers: { 'X-Authorization': token ? `Bearer ${token}` : '' },
                 body: formData,
             });
 
@@ -245,7 +247,10 @@ const Pedidos = () => {
     const fetchOrders = async () => {
         setLoading(true);
         try {
-            const response = await fetch(`${API_BASE}/orders`);
+            const token = localStorage.getItem('sgm_token');
+            const response = await fetch(`${API_BASE}/orders`, {
+                headers: { 'X-Authorization': token ? `Bearer ${token}` : '' }
+            });
             if (response.ok) {
                 const data = await response.json();
                 setOrders(data);
@@ -264,8 +269,10 @@ const Pedidos = () => {
     const handleDelete = async () => {
         if (!selectedForDelete) return;
         try {
+            const token = localStorage.getItem('sgm_token');
             const response = await fetch(`${API_BASE}/orders/${selectedForDelete}`, {
-                method: 'DELETE'
+                method: 'DELETE',
+                headers: { 'X-Authorization': token ? `Bearer ${token}` : '' }
             });
             if (response.ok) {
                 setOrders(prev => prev.filter(o => (o.RowKey || o.id) !== selectedForDelete));

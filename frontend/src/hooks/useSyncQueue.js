@@ -71,9 +71,13 @@ export const useSyncQueue = (onSyncSuccess) => {
         for (const key of pendingKeys) {
             const item = await get(key);
             try {
+                const token = localStorage.getItem('sgm_token');
                 const response = await fetch(`${API_BASE_URL}/tasks/${item.taskId}/complete`, {
                     method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Authorization': token ? `Bearer ${token}` : ''
+                    },
                     body: JSON.stringify(item.data)
                 });
 
