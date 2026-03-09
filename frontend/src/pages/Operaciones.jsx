@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Calendar,
@@ -287,6 +288,7 @@ const TaskDetail = ({ task, onClose, onComplete }) => {
 };
 
 const Operaciones = () => {
+    const navigate = useNavigate();
     const [selectedTask, setSelectedTask] = useState(null);
     const [tasks, setTasks] = useState([]);
     const [loading, setLoading] = useState(true);

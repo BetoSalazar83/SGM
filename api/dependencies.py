@@ -21,7 +21,7 @@ async def get_current_user(x_authorization: Optional[str] = Header(None)):
     email = payload.get("sub")
     token_version = payload.get("token_version")
     
-    if not email or token_version is None:
+    if not email:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token malformado",
@@ -37,7 +37,10 @@ async def get_current_user(x_authorization: Optional[str] = Header(None)):
             detail="Usuario no encontrado",
         )
         
-    if user.get("token_version", 1) != token_version:
+    # Validar token_version solo si está presente en el token (retrocompatibilidad)
+    # o si es explícitamente diferente en la DB
+    db_version = user.get("token_version", 1)
+    if token_version is not None and db_version != token_version:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Sesión invalidada por cambio de seguridad. Por favor, inicie sesión de nuevo.",

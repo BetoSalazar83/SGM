@@ -24,7 +24,7 @@ async def get_evidence_proxy(blob_path: str):
     return Response(content=content, media_type=content_type)
 
 @router.get("", response_model=List[dict])
-async def get_tasks(request: Request = None):
+async def get_tasks(request: Request = None, current_user: dict = Depends(get_current_user)):
     try:
         tasks_data = table_service.get_sync_data(settings.AZURE_TABLE_TASKS, None)
         

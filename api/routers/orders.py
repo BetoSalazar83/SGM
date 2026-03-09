@@ -13,7 +13,7 @@ from dependencies import get_current_user
 router = APIRouter(prefix="/orders", tags=["Orders"])
 
 @router.get("", response_model=List[dict])
-async def get_orders():
+async def get_orders(current_user: dict = Depends(get_current_user)):
     try:
         orders = table_service.get_sync_data(settings.AZURE_TABLE_USERS.replace("Users", "Orders"), None) # Using a naming convention or separate config
         # For now, let's use the actual table name 'SgmOrders'
