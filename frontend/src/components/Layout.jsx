@@ -1,5 +1,3 @@
-import React, { useState, useEffect } from 'react';
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
     LayoutDashboard,
     Users,
@@ -9,7 +7,8 @@ import {
     Menu,
     Activity,
     UserCircle,
-    ChevronDown
+    ChevronDown,
+    X as CloseIcon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
@@ -27,10 +26,11 @@ axios.interceptors.request.use(
     (error) => Promise.reject(error)
 );
 
-const SidebarItem = ({ to, icon: Icon, label }) => (
+const SidebarItem = ({ to, icon: Icon, label, onClick }) => (
     <NavLink
         to={to}
         className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+        onClick={onClick}
     >
         <Icon className="nav-item-icon" />
         <span>{label}</span>
@@ -80,6 +80,12 @@ const Layout = () => {
     const [isSidebarOpen, setSidebarOpen] = useState(false);
     const [user, setUser] = useState(null);
 
+    const handleNavClick = () => {
+        if (window.innerWidth <= 768) {
+            setSidebarOpen(false);
+        }
+    };
+
     useEffect(() => {
         const userData = localStorage.getItem('sgm_user');
         if (userData) {
@@ -105,27 +111,57 @@ const Layout = () => {
 
     return (
         <div className={`app-layout ${!isAdmin ? 'no-sidebar' : ''}`}>
+            {/* Mobile Header Toggle */}
             {isAdmin && (
-                <aside className={`sidebar glass-panel ${isSidebarOpen ? 'open' : ''}`}>
-                    <div className="sidebar-header">
-                        <Activity className="logo-icon" />
-                        <span className="brand-name">SGM</span>
-                    </div>
+                <button
+                    className="mobile-toggle-btn"
+                    onClick={() => setSidebarOpen(!isSidebarOpen)}
+                    aria-label="Toggle menu"
+                >
+                    {isSidebarOpen ? <CloseIcon size={24} /> : <Menu size={24} />}
+                </button>
+            )}
 
-                    <nav className="nav-menu">
-                        <SidebarItem to="/dashboard" icon={LayoutDashboard} label="Dashboard" />
-                        <SidebarItem to="/usuarios" icon={Users} label="Usuarios" />
-                        <SidebarItem to="/pedidos" icon={FileText} label="Pedidos" />
-                        <SidebarItem to="/operaciones" icon={ClipboardList} label="Operaciones" />
-                    </nav>
+            {isAdmin && (
+                <>
+                    {/* Backdrop for mobile */}
+                    <AnimatePresence>
+                        {isSidebarOpen && (
+                            <motion.div
+                                className="sidebar-backdrop"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                onClick={() => setSidebarOpen(false)}
+                            />
+                        )}
+                    </AnimatePresence>
 
-                    <div className="sidebar-footer" style={{ border: 'none', padding: 0 }}>
-                        {/* Footer is now simpler as info is on top */}
-                        <p style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textAlign: 'center', padding: '1rem' }}>
-                            SGM v1.2.0
-                        </p>
-                    </div>
-                </aside>
+                    <aside className={`sidebar glass-panel ${isSidebarOpen ? 'open' : ''}`}>
+                        <div className="sidebar-header">
+                            <Activity className="logo-icon" />
+                            <span className="brand-name">SGM</span>
+                            {/* Close button inside sidebar for mobile */}
+                            <button className="sidebar-close-mobile" onClick={() => setSidebarOpen(false)}>
+                                <CloseIcon size={20} />
+                            </button>
+                        </div>
+
+                        <nav className="nav-menu">
+                            <SidebarItem to="/dashboard" icon={LayoutDashboard} label="Dashboard" onClick={handleNavClick} />
+                            <SidebarItem to="/usuarios" icon={Users} label="Usuarios" onClick={handleNavClick} />
+                            <SidebarItem to="/pedidos" icon={FileText} label="Pedidos" onClick={handleNavClick} />
+                            <SidebarItem to="/operaciones" icon={ClipboardList} label="Operaciones" onClick={handleNavClick} />
+                        </nav>
+
+                        <div className="sidebar-footer" style={{ border: 'none', padding: 0 }}>
+                            {/* Footer is now simpler as info is on top */}
+                            <p style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textAlign: 'center', padding: '1rem' }}>
+                                SGM v1.2.0
+                            </p>
+                        </div>
+                    </aside>
+                </>
             )}
 
             <main className="main-content">
@@ -135,5 +171,5 @@ const Layout = () => {
         </div>
     );
 };
-
+Linda
 export default Layout;
