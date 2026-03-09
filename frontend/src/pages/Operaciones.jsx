@@ -156,6 +156,11 @@ const TaskDetail = ({ task, onClose, onComplete }) => {
             if (response.ok) {
                 alert("Orden cerrada exitosamente");
                 onComplete(task.id, false, payload);
+            } else if (response.status === 401) {
+                alert("Su sesión ha expirado por seguridad. Por favor, inicie sesión de nuevo.");
+                localStorage.removeItem('sgm_token');
+                localStorage.removeItem('sgm_user');
+                navigate('/');
             } else if (response.status >= 500) {
                 // If server is failing (probably storage or partial failure)
                 await addToQueue(task.id, payload);
@@ -306,6 +311,14 @@ const Operaciones = () => {
                 const response = await fetch(`${API_BASE}/tasks`, {
                     headers
                 });
+
+                if (response.status === 401) {
+                    localStorage.removeItem('sgm_token');
+                    localStorage.removeItem('sgm_user');
+                    navigate('/');
+                    return;
+                }
+
                 if (response.ok) {
                     const data = await response.json();
                     const mappedTasks = data.map(t => ({

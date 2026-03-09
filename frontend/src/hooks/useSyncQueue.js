@@ -81,6 +81,13 @@ export const useSyncQueue = (onSyncSuccess) => {
                     await del(key);
                     if (onSyncSuccess) onSyncSuccess(item.taskId);
                     console.log(`Synced task ${item.taskId} successfully`);
+                } else if (response.status === 401) {
+                    console.error("Authentication failed during sync. Stopping queue processing.");
+                    // Force refresh to trigger logout logic in Layout/Login
+                    localStorage.removeItem('sgm_token');
+                    localStorage.removeItem('sgm_user');
+                    window.location.reload();
+                    break;
                 }
             } catch (error) {
                 console.error(`Failed to sync task ${item.taskId}:`, error);
