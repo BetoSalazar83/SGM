@@ -225,4 +225,3 @@ async def delete_order(order_id: str, current_user: dict = Depends(get_current_u
     except Exception as e:
         print(f"Error deleting order: {e}")
         raise HTTPException(status_code=500, detail="Error al eliminar el pedido.")
-```
