@@ -13,7 +13,8 @@ export const useSyncQueue = (onSyncSuccess) => {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 6000); // Aumentar a 6s para evitar falsos negativos en arranques lentos
 
-            const response = await fetch(`${API_BASE_URL.replace('/api', '')}/health`, {
+            // Corregido: hit /api/health instead of trying to strip /api
+            const response = await fetch(`${API_BASE_URL}/health`, {
                 method: 'GET',
                 signal: controller.signal
             });
