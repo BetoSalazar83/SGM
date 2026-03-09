@@ -44,11 +44,16 @@ async def login(request: LoginRequest):
                 detail="Usuario inactivo. Contacte al administrador.",
             )
 
-        # Crear token
+        # Crear token con versión para invalidación
+        token_version = user.get('token_version', 1)
         access_token = create_access_token(
-            data={"sub": user['email'], "role": user.get('role', 'Técnico')}
+            data={
+                "sub": user['email'], 
+                "role": user.get('role', 'Técnico'),
+                "token_version": token_version
+            }
         )
-        
+       
         # Limpiar datos sensibles
         user_info = {
             "name": user.get('name'),

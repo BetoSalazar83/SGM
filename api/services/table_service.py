@@ -44,6 +44,35 @@ class AzureTableService:
             print(f"Error upserting entity: {e}")
             return False
 
+    def log_audit_event(self, entity_type: str, entity_id: str, action: str, performed_by: str, old_value=None, new_value=None):
+        """Regista un evento en la tabla SgmAuditLog"""
+        try:
+            import json
+            from datetime import datetime
+            import uuid
+            
+            now = datetime.utcnow()
+            # RowKey descendente para ver lo más nuevo arriba
+            timestamp_key = str(int(9999999999 - now.timestamp()))
+            row_key = f"{timestamp_key}_{uuid.uuid4().hex[:8]}"
+            
+            audit_data = {
+                "PartitionKey": entity_type,
+                "RowKey": row_key,
+                "entity_id": entity_id,
+                "action": action,
+                "performed_by": performed_by,
+                "timestamp": now.isoformat(),
+                "old_value": json.dumps(old_value) if old_value is not None else None,
+                "new_value": json.dumps(new_value) if new_value is not None else None
+            }
+            
+            self.upsert_entity("SgmAuditLog", audit_data, entity_type, row_key)
+            return True
+        except Exception as e:
+            print(f"Error logging audit event: {e}")
+            return False
+
     def get_entity(self, table_name: str, partition_key: str, row_key: str):
         try:
             table_client = self._get_table_client(table_name)

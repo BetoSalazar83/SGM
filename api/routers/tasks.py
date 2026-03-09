@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Response, Request
+from fastapi import APIRouter, HTTPException, Response, Request, Depends
 from typing import List, Optional
 from pydantic import BaseModel
 from datetime import datetime
@@ -6,6 +6,7 @@ from services.blob_service import blob_service
 from models import Task
 from services.table_service import table_service
 from core.config import settings
+from dependencies import get_current_user
 
 router = APIRouter(prefix="/tasks", tags=["Tasks"])
 
@@ -61,13 +62,23 @@ class TaskCompleteRequest(BaseModel):
     equipment_not_found: bool = False
 
 @router.put("/{task_id}/complete")
-async def complete_task(task_id: str, payload: TaskCompleteRequest):
+async def complete_task(task_id: str, payload: TaskCompleteRequest, current_user: dict = Depends(get_current_user)):
     try:
         from services.blob_service import blob_service
         
-        # 0. Get current task info to get order_id
+        # 0. Get current task info to get order_id and real PartitionKey
         table_client = table_service._get_table_client(settings.AZURE_TABLE_TASKS)
-        task_entity = table_client.get_entity(partition_key="Tasks", row_key=task_id)
+        
+        # Try finding in the new partition first (assuming task_id is RowKey and we need PartitionKey)
+        # Since we don't have order_id yet, we search by RowKey
+        task_query = f"RowKey eq '{task_id}'"
+        tasks_found = list(table_client.query_entities(query_filter=task_query))
+        
+        if not tasks_found:
+            raise HTTPException(status_code=404, detail="Tarea no encontrada")
+        
+        task_entity = tasks_found[0]
+        actual_partition = task_entity['PartitionKey']
         order_id = str(task_entity.get('order_id', 'UnknownOrder'))
         
         # 1. Define Folder Structure: [Año-Mes]/[No.Pedido]
@@ -90,38 +101,56 @@ async def complete_task(task_id: str, payload: TaskCompleteRequest):
             "evidence_during": img_during,
             "evidence_after": img_after,
             "equipment_not_found": payload.equipment_not_found,
-            "completed_at": now.isoformat()
+            "completed_at": now.isoformat(),
+            "completed_by": current_user.get('sub')
         }
         
         success = table_service.upsert_entity(
             table_name=settings.AZURE_TABLE_TASKS,
             entity_data=update_data,
-            partition_key="Tasks",
+            partition_key=actual_partition,
             row_key=task_id
         )
         
         if success:
             # 4. Update Order Progress
             try:
-                # Query only tasks for this specific order
-                tasks_query = f"order_id eq '{order_id}'"
-                order_tasks = list(table_client.query_entities(query_filter=tasks_query))
+                # Query both new partitioned tasks and legacy tasks
+                # New partition
+                new_tasks_query = f"PartitionKey eq '{order_id}'"
+                order_tasks = list(table_client.query_entities(query_filter=new_tasks_query))
+                
+                # Legacy tasks
+                legacy_tasks_query = f"PartitionKey eq 'Tasks' and order_id eq '{order_id}'"
+                order_tasks.extend(list(table_client.query_entities(query_filter=legacy_tasks_query)))
                 
                 total = len(order_tasks)
                 completed = len([t for t in order_tasks if t.get('status') == 'completed'])
                 progress = int((completed / total) * 100) if total > 0 else 0
                 
-                # Check if all completed to maybe change order status to 'Finalizado' or similar
+                # Check if all completed
                 order_status = "En Proceso" if completed > 0 else "Pendiente"
                 if completed == total and total > 0:
-                    order_status = "Atendido" # Or "Finalizado"
+                    order_status = "Atendido"
 
                 order_update = {
                     "completed_count": completed,
                     "progress": progress,
-                    "status": order_status
+                    "status": order_status,
+                    "updated_at": datetime.utcnow().isoformat(),
+                    "updated_by": current_user.get('sub')
                 }
                 table_service.upsert_entity("SgmOrders", order_update, "Orders", str(order_id))
+                
+                # Log audit event for Task
+                table_service.log_audit_event(
+                    entity_type="Task",
+                    entity_id=task_id,
+                    action="complete",
+                    performed_by=current_user.get('sub'),
+                    old_value={"status": task_entity.get('status')},
+                    new_value={"status": "completed", "comments": payload.comments}
+                )
             except Exception as oe:
                 print(f"Error updating order progress: {oe}")
 

@@ -15,14 +15,32 @@ class User(SyncModel):
     full_name: str
     role: str # admin, tech
     active: bool = True
+    token_version: int = Field(default=1)
+    # Soft delete fields
+    is_deleted: bool = False
+    deleted_at: Optional[datetime] = None
+    deleted_by: Optional[str] = None
 
 # Work Order (Pedido)
 class Order(SyncModel):
     order_number: str
-    creation_date: datetime
-    status: str
+    year: str
+    month: str
+    order_type: str # Preventivo, Correctivo, etc
     total_assets: int
-    assets_summary: dict # JSON with prev/corr counts
+    completed_count: int = 0
+    progress: int = 0
+    status: str = "Pendiente" # Pendiente, En Proceso, Completado
+    creation_date: datetime = Field(default_factory=datetime.utcnow)
+    
+    # Audit fields
+    updated_at: Optional[datetime] = None
+    updated_by: Optional[str] = None
+    
+    # Soft delete fields
+    is_deleted: bool = False
+    deleted_at: Optional[datetime] = None
+    deleted_by: Optional[str] = None
 
 # Asset Task (Aviso)
 class Task(SyncModel):
@@ -43,6 +61,20 @@ class Task(SyncModel):
     
     closing_comments: Optional[str] = None
     completed_at: Optional[datetime] = None
+    
+    # Audit fields
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    completed_by: Optional[str] = None
+
+# Audit Log entry
+class AuditLog(SyncModel):
+    PartitionKey: str # entity_type: User, Order, Task
+    entity_id: str
+    action: str # create, update, delete, reset_password
+    performed_by: str
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    old_value: Optional[str] = None # JSON string
+    new_value: Optional[str] = None # JSON string
 
 # Sync Response Wrapper
 class SyncResponse(BaseModel):

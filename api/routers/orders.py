@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, HTTPException, UploadFile, File, Depends
 from typing import List, Optional
 # Removed pandas to reduce package size for Azure
 import io
@@ -8,6 +8,7 @@ from datetime import datetime
 from services.table_service import table_service
 from core.config import settings
 from models import Order, Task
+from dependencies import get_current_user
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
 
@@ -23,8 +24,9 @@ async def get_orders():
         return []
 
 @router.post("/import")
-async def import_order(file: UploadFile = File(...)):
+async def import_order(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
     try:
+        user_email = current_user.get('sub', 'Unknown')
         contents = await file.read()
         import openpyxl
         wb = openpyxl.load_workbook(io.BytesIO(contents), data_only=True)
@@ -46,18 +48,58 @@ async def import_order(file: UploadFile = File(...)):
             missing = [h for i, h in enumerate(["Pedido", "No.Aviso", "No.Equipo", "Tipo.Mantenimiento"]) if [idx_pedido, idx_aviso, idx_equipo, idx_tipo][i] == -1]
             raise HTTPException(status_code=400, detail=f"Faltan las columnas requeridas: {', '.join(missing)}")
 
-        # Process rows and group by Pedido
+        # 1. Validate duplicates within Excel and extract IDs
+        excel_tasks = set()
+        rows_to_process = list(sheet.iter_rows(min_row=2, values_only=True))
+        for row in rows_to_process:
+            if not row[idx_aviso]: continue
+            tid = str(row[idx_aviso])
+            if tid in excel_tasks:
+                print(f"BLOCK: Duplicate Task ID {tid} in Excel file. User: {user_email}")
+                raise HTTPException(status_code=400, detail=f"El archivo Excel contiene avisos duplicados: {tid}")
+            excel_tasks.add(tid)
+
+        # 2. Process rows and group by Pedido
         order_groups = {}
-        for row in sheet.iter_rows(min_row=2, values_only=True):
+        for row in rows_to_process:
             if not row[idx_pedido]: continue
             oid = str(row[idx_pedido])
             if oid not in order_groups:
                 order_groups[oid] = []
             order_groups[oid].append(row)
         
+        # 3. System-wide Validations
+        table_tasks_client = table_service._get_table_client(settings.AZURE_TABLE_TASKS)
+        table_orders_client = table_service._get_table_client("SgmOrders")
+
+        for oid, rows in order_groups.items():
+            # 3.1 Check if Order already exists and if it has worked tasks
+            existing_order = table_service.get_entity("SgmOrders", "Orders", oid)
+            if existing_order:
+                # Query all tasks for this order across all partitions
+                tasks_query = f"order_id eq '{oid}'"
+                existing_tasks = list(table_tasks_client.query_entities(query_filter=tasks_query))
+                
+                worked_tasks = [t for t in existing_tasks if str(t.get('status', 'pending')).lower() not in ['pending', 'pendiente']]
+                if worked_tasks:
+                    print(f"BLOCK: Order {oid} has worked tasks. Cannot overwrite. User: {user_email}")
+                    raise HTTPException(status_code=400, detail=f"No se puede cargar el pedido {oid} porque ya tiene mantenimientos atendidos o en proceso.")
+
+            # 3.2 Check Task uniqueness (across all orders)
+            for r in rows:
+                task_id = str(r[idx_aviso])
+                # Global search by RowKey
+                task_search_query = f"RowKey eq '{task_id}'"
+                other_tasks = list(table_tasks_client.query_entities(query_filter=task_search_query))
+                
+                for t in other_tasks:
+                    if str(t.get('order_id')) != oid:
+                        print(f"BLOCK: Task ID {task_id} already exists in Order {t.get('order_id')}. User: {user_email}")
+                        raise HTTPException(status_code=400, detail=f"El aviso {task_id} ya existe en otro pedido ({t.get('order_id')}).")
+
+        # 4. Perform weighted updates/creations
         for oid, rows in order_groups.items():
             first_row = rows[0]
-            # Flexible year/month check
             idx_year = get_col_idx("Año")
             idx_month = get_col_idx("Mes")
             year = str(first_row[idx_year]) if idx_year != -1 and first_row[idx_year] else str(datetime.utcnow().year)
@@ -71,14 +113,10 @@ async def import_order(file: UploadFile = File(...)):
                 if "preventivo" in m_type: prev_count += 1
                 if "correctivo" in m_type: corr_count += 1
             
-            if prev_count > 0 and corr_count > 0:
-                order_type = "Preventivo-Correctivo"
-            elif corr_count > 0:
-                order_type = "Correctivo"
-            else:
-                order_type = "Preventivo"
+            order_type = "Preventivo-Correctivo" if prev_count > 0 and corr_count > 0 else ("Correctivo" if corr_count > 0 else "Preventivo")
 
-            # 1. Create/Update Order Summary
+            # 4.1 Upsert Order Summary (Maintaining original creation info if exists)
+            existing_order = table_service.get_entity("SgmOrders", "Orders", oid)
             order_data = {
                 "PartitionKey": "Orders",
                 "RowKey": oid,
@@ -88,23 +126,31 @@ async def import_order(file: UploadFile = File(...)):
                 "order_type": order_type,
                 "prev_count": prev_count,
                 "corr_count": corr_count,
-                "completed_count": 0,
-                "creation_date": datetime.utcnow().isoformat(),
-                "status": "Pendiente",
+                "completed_count": existing_order.get('completed_count', 0) if existing_order else 0,
+                "creation_date": existing_order.get('creation_date', datetime.utcnow().isoformat()) if existing_order else datetime.utcnow().isoformat(),
+                "status": existing_order.get('status', 'Pendiente') if existing_order else 'Pendiente',
                 "total_assets": len(rows),
-                "progress": 0
+                "progress": existing_order.get('progress', 0) if existing_order else 0,
+                "updated_at": datetime.utcnow().isoformat(),
+                "updated_by": user_email
             }
             table_service.upsert_entity("SgmOrders", order_data, "Orders", oid)
             
-            # 2. Create Tasks (Avisos)
+            # 4.2 Upsert Tasks (Protecting operational fields)
             idx_activo = get_col_idx("No.Activo") if get_col_idx("No.Activo") != -1 else get_col_idx("No. Activo")
             idx_nombre = get_col_idx("Nombre.Equipo")
             idx_loc = get_col_idx("Nombre.Ubicación")
 
             for r in rows:
                 task_id = str(r[idx_aviso])
+                # Check for existing task to protect fields
+                existing_task = None
+                task_search = list(table_tasks_client.query_entities(query_filter=f"RowKey eq '{task_id}'"))
+                if task_search:
+                    existing_task = task_search[0]
+
                 task_data = {
-                    "PartitionKey": "Tasks",
+                    "PartitionKey": oid,
                     "RowKey": task_id,
                     "order_id": oid,
                     "year": year,
@@ -115,33 +161,68 @@ async def import_order(file: UploadFile = File(...)):
                     "location": str(r[idx_loc]) if idx_loc != -1 else "Sin Ubicación",
                     "maintenance_type": str(r[idx_tipo]),
                     "priority": "normal",
-                    "status": "pending"
+                    "status": existing_task.get('status', 'pending') if existing_task else 'pending',
+                    "created_at": existing_task.get('created_at', datetime.utcnow().isoformat()) if existing_task else datetime.utcnow().isoformat()
                 }
-                table_service.upsert_entity(settings.AZURE_TABLE_TASKS, task_data, "Tasks", task_id)
+
+                # Preserve all operational fields if task exists
+                if existing_task:
+                    operational_fields = [
+                        'completed_at', 'completed_by', 'closing_comments', 
+                        'equipment_not_found', 'evidence_tag', 'evidence_before', 
+                        'evidence_during', 'evidence_after'
+                    ]
+                    for field in operational_fields:
+                        if field in existing_task:
+                            task_data[field] = existing_task[field]
+
+                table_service.upsert_entity(settings.AZURE_TABLE_TASKS, task_data, oid, task_id)
+
+        # Log audit for the entire import
+        table_service.log_audit_event(
+            entity_type="Order",
+            entity_id="BatchImport",
+            action="import",
+            performed_by=user_email,
+            new_value={"orders_imported": list(order_groups.keys())}
+        )
 
         return {"status": "success", "message": f"Importados {len(order_groups)} pedidos con éxito."}
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"Error importing Excel: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/{order_id}")
-async def delete_order(order_id: str):
+async def delete_order(order_id: str, current_user: dict = Depends(get_current_user)):
     try:
-        # 1. Delete Avisos associated with this order
-        # For simplicity in Azure Tables, we might need to query and then delete each
-        # A more robust way is to query where order_id == order_id
-        all_tasks = table_service.get_sync_data(settings.AZURE_TABLE_TASKS, None)
-        tasks_to_delete = [t for t in all_tasks if t.get("order_id") == order_id]
+        user_email = current_user.get('sub', 'Unknown')
         
-        table_client = table_service._get_table_client(settings.AZURE_TABLE_TASKS)
-        for task in tasks_to_delete:
-            table_client.delete_entity(partition_key="Tasks", row_key=task["RowKey"])
+        # Soft delete del pedido
+        order = table_service.get_entity("SgmOrders", "Orders", order_id)
+        if not order:
+            raise HTTPException(status_code=404, detail="Pedido no encontrado")
             
-        # 2. Delete Order Entry
-        order_client = table_service._get_table_client("SgmOrders")
-        order_client.delete_entity(partition_key="Orders", row_key=order_id)
+        order['is_deleted'] = True
+        order['deleted_at'] = datetime.utcnow().isoformat()
+        order['deleted_by'] = user_email
         
-        return {"status": "success", "message": "Pedido y avisos eliminados."}
+        success = table_service.upsert_entity("SgmOrders", order, "Orders", order_id)
+        
+        if success:
+            # Log audit for order soft deletion
+            table_service.log_audit_event(
+                entity_type="Order",
+                entity_id=order_id,
+                action="soft_delete",
+                performed_by=user_email,
+                old_value={"order_id": order_id}
+            )
+            return {"status": "success", "message": "Pedido eliminado (lógico)."}
+        else:
+            raise HTTPException(status_code=500, detail="Error al marcar el pedido como eliminado.")
     except Exception as e:
         print(f"Error deleting order: {e}")
         raise HTTPException(status_code=500, detail="Error al eliminar el pedido.")
+```
