@@ -25,6 +25,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.on_event("startup")
+async def startup_event():
+    # Inicializar tablas si no existen
+    table_service.ensure_tables_exist()
+
 app.include_router(sync_router)
 app.include_router(tasks_router)
 app.include_router(orders_router)
