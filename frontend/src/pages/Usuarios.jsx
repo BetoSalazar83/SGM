@@ -11,7 +11,8 @@ import {
     Check,
     Trash2,
     Key,
-    AlertCircle
+    AlertCircle,
+    Eraser
 } from 'lucide-react';
 import axios from 'axios';
 import { API_BASE_URL } from '../config';
@@ -244,6 +245,25 @@ const Usuarios = () => {
         }
     };
 
+    const handleResetSystem = async () => {
+        const confirmation = window.prompt(
+            'Esto eliminará permanentemente TODOS los pedidos, tareas y usuarios (excepto admin@sgm.com). El historial de auditoría se conservará.\n\nEscribe ELIMINAR TODO para confirmar:'
+        );
+        if (confirmation !== 'ELIMINAR TODO') return;
+
+        try {
+            const token = localStorage.getItem('sgm_token');
+            const response = await axios.post(`${API_BASE}/admin/reset-system`, {}, {
+                headers: { 'X-Authorization': token ? `Bearer ${token}` : '' }
+            });
+            const { orders_deleted, tasks_deleted, users_deleted } = response.data;
+            alert(`Sistema limpiado: ${orders_deleted} pedidos, ${tasks_deleted} tareas y ${users_deleted} usuarios eliminados.`);
+            fetchUsers();
+        } catch (err) {
+            alert(err.response?.data?.detail || 'Error al limpiar el sistema');
+        }
+    };
+
     const handleReset = async (email) => {
         if (!window.confirm(`Se generará una nueva contraseña para ${email}. ¿Continuar?`)) return;
         try {
@@ -276,10 +296,16 @@ const Usuarios = () => {
                     <p>Administra el acceso y roles del personal.</p>
                 </div>
 
-                <motion.button onClick={() => { setSelectedUser(null); setIsModalOpen(true); }} className="glass-button btn-primary">
-                    <Plus size={18} />
-                    <span>Nuevo Usuario</span>
-                </motion.button>
+                <div className="page-actions" style={{ display: 'flex', gap: '0.5rem' }}>
+                    <motion.button onClick={handleResetSystem} className="glass-button btn-secondary text-error" title="Elimina permanentemente pedidos, tareas y usuarios (excepto admin)">
+                        <Eraser size={18} />
+                        <span>Limpiar Sistema</span>
+                    </motion.button>
+                    <motion.button onClick={() => { setSelectedUser(null); setIsModalOpen(true); }} className="glass-button btn-primary">
+                        <Plus size={18} />
+                        <span>Nuevo Usuario</span>
+                    </motion.button>
+                </div>
             </div>
 
             <div className="toolbar glass-panel">

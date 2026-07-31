@@ -15,10 +15,8 @@ router = APIRouter(prefix="/orders", tags=["Orders"])
 @router.get("", response_model=List[dict])
 async def get_orders(current_user: dict = Depends(get_current_user)):
     try:
-        orders = table_service.get_sync_data(settings.AZURE_TABLE_USERS.replace("Users", "Orders"), None) # Using a naming convention or separate config
-        # For now, let's use the actual table name 'SgmOrders'
         orders = table_service.get_sync_data("SgmOrders", None)
-        return orders
+        return [o for o in orders if not o.get('is_deleted')]
     except Exception as e:
         print(f"Error fetching orders: {e}")
         return []

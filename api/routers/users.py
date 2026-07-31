@@ -34,7 +34,7 @@ class UserOut(UserBase):
 async def list_users(admin_user: dict = Depends(check_admin)):
     try:
         users = table_service.get_sync_data(settings.AZURE_TABLE_USERS, None)
-        return users
+        return [u for u in users if not u.get('is_deleted')]
     except Exception as e:
         raise HTTPException(status_code=500, detail="Error al listar usuarios")
 
