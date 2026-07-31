@@ -104,6 +104,21 @@ class AzureTableService:
         except Exception:
             return False
 
+    def delete_all_entities(self, table_name: str, exclude_row_keys: list = None):
+        """Borra todas las entidades de una tabla, opcionalmente excluyendo ciertos RowKeys."""
+        exclude = {rk.lower() for rk in (exclude_row_keys or [])}
+        table_client = self._get_table_client(table_name)
+        deleted = 0
+        for entity in list(table_client.list_entities()):
+            if str(entity.get('RowKey', '')).lower() in exclude:
+                continue
+            try:
+                table_client.delete_entity(partition_key=entity['PartitionKey'], row_key=entity['RowKey'])
+                deleted += 1
+            except Exception as e:
+                print(f"Error deleting entity {entity.get('RowKey')} from {table_name}: {e}")
+        return deleted
+
     def get_sync_data(self, table_name: str, last_sync: datetime):
         """
         Recupera registros modificados después de la fecha last_sync.
