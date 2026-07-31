@@ -216,8 +216,8 @@ const Usuarios = () => {
             const config = { headers: { 'X-Authorization': token ? `Bearer ${token}` : '' } };
             if (selectedUser) {
                 // Update (solo nombre, rol y estatus)
-                // Implementar endpoint PUT /users/{email} en el futuro o usar POST upsert
-                await axios.post(`${API_BASE}/users/`, data, config);
+                const { name, role, status } = data;
+                await axios.put(`${API_BASE}/users/${selectedUser.email}`, { name, role, status }, config);
             } else {
                 // Create
                 await axios.post(`${API_BASE}/users/`, data, config);

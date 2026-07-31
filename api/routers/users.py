@@ -65,6 +65,31 @@ async def create_user(user: UserCreate, admin_user: dict = Depends(check_admin))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.put("/{email}", response_model=UserOut)
+async def update_user(email: str, user_update: UserUpdate, admin_user: dict = Depends(check_admin)):
+    try:
+        existing = table_service.get_entity(settings.AZURE_TABLE_USERS, "Users", email.lower())
+        if not existing:
+            raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+        update_data = user_update.dict(exclude_unset=True)
+        existing.update(update_data)
+
+        success = table_service.upsert_entity(settings.AZURE_TABLE_USERS, existing, "Users", email.lower())
+        if success:
+            table_service.log_audit_event(
+                entity_type="User",
+                entity_id=email.lower(),
+                action="update",
+                performed_by=admin_user.get('sub'),
+                new_value=update_data
+            )
+            return existing
+        raise HTTPException(status_code=500, detail="Error al actualizar el usuario")
+    except HTTPException: raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.post("/{email}/reset-password")
 async def reset_password(email: str, admin_user: dict = Depends(check_admin)):
     """Genera una contraseña temporal para un usuario."""
