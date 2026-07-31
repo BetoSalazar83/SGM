@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Calendar,
@@ -135,12 +136,18 @@ const TaskDetail = ({ task, onClose, onComplete }) => {
         }
 
         try {
+            const token = localStorage.getItem('sgm_token');
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
 
+            const headers = { 'Content-Type': 'application/json' };
+            if (token) {
+                headers['X-Authorization'] = `Bearer ${token}`;
+            }
+
             const response = await fetch(`${API_BASE}/tasks/${task.id}/complete`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify(payload),
                 signal: controller.signal
             });
@@ -150,6 +157,11 @@ const TaskDetail = ({ task, onClose, onComplete }) => {
             if (response.ok) {
                 alert("Orden cerrada exitosamente");
                 onComplete(task.id, false, payload);
+            } else if (response.status === 401) {
+                alert("Su sesión ha expirado por seguridad. Por favor, inicie sesión de nuevo.");
+                localStorage.removeItem('sgm_token');
+                localStorage.removeItem('sgm_user');
+                navigate('/');
             } else if (response.status >= 500) {
                 // If server is failing (probably storage or partial failure)
                 await addToQueue(task.id, payload);
@@ -276,6 +288,7 @@ const TaskDetail = ({ task, onClose, onComplete }) => {
 };
 
 const Operaciones = () => {
+    const navigate = useNavigate();
     const [selectedTask, setSelectedTask] = useState(null);
     const [tasks, setTasks] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -287,11 +300,27 @@ const Operaciones = () => {
     useEffect(() => {
         const fetchTasks = async () => {
             try {
+                const token = localStorage.getItem('sgm_token');
                 // Try to load from cache first for immediate UI
                 const cached = await get(TASKS_CACHE_KEY);
                 if (cached) setTasks(cached);
 
-                const response = await fetch(`${API_BASE}/tasks`);
+                const headers = {};
+                if (token) {
+                    headers['X-Authorization'] = `Bearer ${token}`;
+                }
+
+                const response = await fetch(`${API_BASE}/tasks`, {
+                    headers
+                });
+
+                if (response.status === 401) {
+                    localStorage.removeItem('sgm_token');
+                    localStorage.removeItem('sgm_user');
+                    navigate('/');
+                    return;
+                }
+
                 if (response.ok) {
                     const data = await response.json();
                     const mappedTasks = data.map(t => ({

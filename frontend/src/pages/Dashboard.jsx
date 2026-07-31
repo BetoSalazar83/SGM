@@ -56,7 +56,10 @@ const Dashboard = () => {
 
     const fetchStats = async () => {
         try {
-            const response = await axios.get(`${API_BASE}/dashboard/stats`);
+            const token = localStorage.getItem('sgm_token');
+            const response = await axios.get(`${API_BASE}/dashboard/stats`, {
+                headers: { 'X-Authorization': token ? `Bearer ${token}` : '' }
+            });
             setStats(response.data);
         } catch (error) {
             console.error("Error fetching dashboard stats:", error);

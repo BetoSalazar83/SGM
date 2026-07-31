@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     AZURE_TABLE_USERS: str = "SgmUsers"
     AZURE_TABLE_TASKS: str = "SgmTasks"
     AZURE_TABLE_ORDERS: str = "SgmOrders"
+    AZURE_TABLE_AUDIT: str = "SgmAuditLog"
     AZURE_CONTAINER_EVIDENCE: str = "sguevidence"
     SECRET_KEY: str = "temporary-secret-key-for-build" # JWT Secret
     ALGORITHM: str = "HS256"

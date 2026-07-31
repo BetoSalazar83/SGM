@@ -2,9 +2,9 @@ from fastapi import APIRouter, HTTPException, Depends, status
 from pydantic import BaseModel
 from typing import List, Optional
 from services.table_service import table_service
-from core.security import get_password_hash, decode_token
+from core.security import get_password_hash
 from core.config import settings
-from fastapi import Header
+from dependencies import get_current_user, check_admin
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
@@ -27,30 +27,7 @@ class UserOut(UserBase):
     RowKey: str
     lastLogin: Optional[str] = None
 
-# Dependencia para obtener el usuario actual
-async def get_current_user(x_authorization: Optional[str] = Header(None)):
-    if not x_authorization or not x_authorization.startswith("Bearer "):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token inválido o expirado",
-        )
-    token = x_authorization.replace("Bearer ", "")
-    payload = decode_token(token)
-    if not payload:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token inválido o expirado",
-        )
-    return payload
-
-# Dependencia para validar si es Administrador
-async def check_admin(current_user: dict = Depends(get_current_user)):
-    if current_user.get('role') != 'Administrador':
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Se requieren permisos de administrador"
-        )
-    return current_user
+# Logic moved to dependencies.py
 
 @router.get("/", response_model=List[UserOut])
 async def list_users(admin_user: dict = Depends(check_admin)):
@@ -101,7 +78,15 @@ async def reset_password(email: str, admin_user: dict = Depends(check_admin)):
         temp_pwd = ''.join(secrets.choice(string.ascii_letters + string.digits) for i in range(10))
         
         user['hashed_password'] = get_password_hash(temp_pwd)
+        user['token_version'] = user.get('token_version', 1) + 1 # Invalidar tokens antiguos
         table_service.upsert_entity(settings.AZURE_TABLE_USERS, user, "Users", email.lower())
+        
+        table_service.log_audit_event(
+            entity_type="User",
+            entity_id=email.lower(),
+            action="reset_password",
+            performed_by=admin_user.get('sub')
+        )
         
         return {"message": "Contraseña reseteada con éxito", "temp_password": temp_pwd}
     except Exception as e:
@@ -118,10 +103,25 @@ async def delete_user(email: str, admin_user: dict = Depends(check_admin)):
         if email.lower() == "admin@sgm.com":
              raise HTTPException(status_code=400, detail="No se puede eliminar el administrador del sistema")
 
-        success = table_service.delete_entity(settings.AZURE_TABLE_USERS, "Users", email.lower())
+        # Soft delete
+        user = table_service.get_entity(settings.AZURE_TABLE_USERS, "Users", email.lower())
+        if not user:
+            raise HTTPException(status_code=404, detail="Usuario no encontrado")
+            
+        user['is_deleted'] = True
+        user['deleted_at'] = datetime.utcnow().isoformat()
+        user['deleted_by'] = admin_user.get('sub')
+        
+        success = table_service.upsert_entity(settings.AZURE_TABLE_USERS, user, "Users", email.lower())
         if success:
-            return {"message": "Usuario eliminado"}
-        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+            table_service.log_audit_event(
+                entity_type="User",
+                entity_id=email.lower(),
+                action="soft_delete",
+                performed_by=admin_user.get('sub')
+            )
+            return {"message": "Usuario eliminado (lógico)"}
+        raise HTTPException(status_code=500, detail="Error al eliminar el usuario")
     except HTTPException: raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

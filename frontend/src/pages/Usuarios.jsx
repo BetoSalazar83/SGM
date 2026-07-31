@@ -197,7 +197,10 @@ const Usuarios = () => {
     const fetchUsers = async () => {
         setLoading(true);
         try {
-            const response = await axios.get(`${API_BASE}/users/`);
+            const token = localStorage.getItem('sgm_token');
+            const response = await axios.get(`${API_BASE}/users/`, {
+                headers: { 'X-Authorization': token ? `Bearer ${token}` : '' }
+            });
             setUsers(response.data);
         } catch (err) {
             setError('Error al cargar usuarios');
@@ -209,13 +212,15 @@ const Usuarios = () => {
     const handleSave = async (data) => {
         setLoading(true);
         try {
+            const token = localStorage.getItem('sgm_token');
+            const config = { headers: { 'X-Authorization': token ? `Bearer ${token}` : '' } };
             if (selectedUser) {
                 // Update (solo nombre, rol y estatus)
                 // Implementar endpoint PUT /users/{email} en el futuro o usar POST upsert
-                await axios.post(`${API_BASE}/users/`, data);
+                await axios.post(`${API_BASE}/users/`, data, config);
             } else {
                 // Create
-                await axios.post(`${API_BASE}/users/`, data);
+                await axios.post(`${API_BASE}/users/`, data, config);
             }
             setIsModalOpen(false);
             fetchUsers();
@@ -229,7 +234,10 @@ const Usuarios = () => {
     const handleDelete = async (email) => {
         if (!window.confirm(`¿Está seguro de eliminar al usuario ${email}?`)) return;
         try {
-            await axios.delete(`${API_BASE}/users/${email}`);
+            const token = localStorage.getItem('sgm_token');
+            await axios.delete(`${API_BASE}/users/${email}`, {
+                headers: { 'X-Authorization': token ? `Bearer ${token}` : '' }
+            });
             fetchUsers();
         } catch (err) {
             alert('Error al eliminar usuario');
@@ -239,7 +247,10 @@ const Usuarios = () => {
     const handleReset = async (email) => {
         if (!window.confirm(`Se generará una nueva contraseña para ${email}. ¿Continuar?`)) return;
         try {
-            const response = await axios.post(`${API_BASE}/users/${email}/reset-password`);
+            const token = localStorage.getItem('sgm_token');
+            const response = await axios.post(`${API_BASE}/users/${email}/reset-password`, {}, {
+                headers: { 'X-Authorization': token ? `Bearer ${token}` : '' }
+            });
             setTempPassword(response.data.temp_password);
             setSelectedUser({ email });
             setIsSuccessOpen(true);

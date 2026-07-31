@@ -13,7 +13,8 @@ export const useSyncQueue = (onSyncSuccess) => {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 6000); // Aumentar a 6s para evitar falsos negativos en arranques lentos
 
-            const response = await fetch(`${API_BASE_URL.replace('/api', '')}/health`, {
+            // Corregido: hit /api/health instead of trying to strip /api
+            const response = await fetch(`${API_BASE_URL}/health`, {
                 method: 'GET',
                 signal: controller.signal
             });
@@ -70,9 +71,13 @@ export const useSyncQueue = (onSyncSuccess) => {
         for (const key of pendingKeys) {
             const item = await get(key);
             try {
+                const token = localStorage.getItem('sgm_token');
                 const response = await fetch(`${API_BASE_URL}/tasks/${item.taskId}/complete`, {
                     method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Authorization': token ? `Bearer ${token}` : ''
+                    },
                     body: JSON.stringify(item.data)
                 });
 
@@ -80,6 +85,13 @@ export const useSyncQueue = (onSyncSuccess) => {
                     await del(key);
                     if (onSyncSuccess) onSyncSuccess(item.taskId);
                     console.log(`Synced task ${item.taskId} successfully`);
+                } else if (response.status === 401) {
+                    console.error("Authentication failed during sync. Stopping queue processing.");
+                    // Force refresh to trigger logout logic in Layout/Login
+                    localStorage.removeItem('sgm_token');
+                    localStorage.removeItem('sgm_user');
+                    window.location.reload();
+                    break;
                 }
             } catch (error) {
                 console.error(`Failed to sync task ${item.taskId}:`, error);

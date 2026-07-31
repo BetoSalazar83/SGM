@@ -9,7 +9,8 @@ class AzureTableService:
         self._service_client = None
         self.users_table = settings.AZURE_TABLE_USERS
         self.tasks_table = settings.AZURE_TABLE_TASKS
-        self.orders_table = "SgmOrders"
+        self.orders_table = settings.AZURE_TABLE_ORDERS
+        self.audit_table = settings.AZURE_TABLE_AUDIT
 
     @property
     def service_client(self):
@@ -22,6 +23,21 @@ class AzureTableService:
                 conn_str=settings.AZURE_STORAGE_CONNECTION_STRING
             )
         return self._service_client
+
+    def ensure_tables_exist(self):
+        """Crea las tablas necesarias si no existen."""
+        required_tables = [
+            self.users_table,
+            self.tasks_table,
+            self.orders_table,
+            self.audit_table
+        ]
+        for table in required_tables:
+            try:
+                self.service_client.create_table_if_not_exists(table)
+                print(f"Table verified/created: {table}")
+            except Exception as e:
+                print(f"Error ensuring table {table}: {e}")
 
     def _get_table_client(self, table_name):
         return self.service_client.get_table_client(table_name)
@@ -42,6 +58,35 @@ class AzureTableService:
             return True
         except Exception as e:
             print(f"Error upserting entity: {e}")
+            return False
+
+    def log_audit_event(self, entity_type: str, entity_id: str, action: str, performed_by: str, old_value=None, new_value=None):
+        """Regista un evento en la tabla SgmAuditLog"""
+        try:
+            import json
+            from datetime import datetime
+            import uuid
+            
+            now = datetime.utcnow()
+            # RowKey descendente para ver lo más nuevo arriba
+            timestamp_key = str(int(9999999999 - now.timestamp()))
+            row_key = f"{timestamp_key}_{uuid.uuid4().hex[:8]}"
+            
+            audit_data = {
+                "PartitionKey": entity_type,
+                "RowKey": row_key,
+                "entity_id": entity_id,
+                "action": action,
+                "performed_by": performed_by,
+                "timestamp": now.isoformat(),
+                "old_value": json.dumps(old_value) if old_value is not None else None,
+                "new_value": json.dumps(new_value) if new_value is not None else None
+            }
+            
+            self.upsert_entity(self.audit_table, audit_data, entity_type, row_key)
+            return True
+        except Exception as e:
+            print(f"Error logging audit event: {e}")
             return False
 
     def get_entity(self, table_name: str, partition_key: str, row_key: str):
