@@ -35,7 +35,8 @@ async def get_tasks(request: Request = None, current_user: dict = Depends(get_cu
             base_url = "http://localhost:8000"
 
         # Rewrite evidence URLs to use local proxy
-        base_proxy_url = "/api/tasks/evidence"
+        # NOTE: base_url already includes root_path ("/api"), so this must NOT repeat it
+        base_proxy_url = "/tasks/evidence"
         for task in tasks_data:
             for field in ["evidence_tag", "evidence_before", "evidence_during", "evidence_after"]:
                 url = task.get(field)
