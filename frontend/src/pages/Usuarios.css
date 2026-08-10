@@ -116,6 +116,12 @@
     border: 1px solid rgba(56, 189, 248, 0.2);
 }
 
+.role-pm {
+    background: rgba(251, 191, 36, 0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(251, 191, 36, 0.2);
+}
+
 .status-badge {
     display: inline-flex;
     align-items: center;

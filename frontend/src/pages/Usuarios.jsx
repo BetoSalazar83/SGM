@@ -7,6 +7,7 @@ import {
     MoreVertical,
     Shield,
     Wrench,
+    Briefcase,
     X,
     Check,
     Trash2,
@@ -21,11 +22,16 @@ import './Usuarios.css';
 
 const API_BASE = API_BASE_URL;
 
+const ROLE_BADGE = {
+    'Administrador': { className: 'role-admin', Icon: Shield },
+    'Project Manager': { className: 'role-pm', Icon: Briefcase },
+};
+
 const RoleBadge = ({ role }) => {
-    const isAdmin = role === 'Administrador';
+    const { className, Icon } = ROLE_BADGE[role] || { className: 'role-tech', Icon: Wrench };
     return (
-        <span className={`role-badge ${isAdmin ? 'role-admin' : 'role-tech'}`}>
-            {isAdmin ? <Shield size={14} /> : <Wrench size={14} />}
+        <span className={`role-badge ${className}`}>
+            <Icon size={14} />
             {role}
         </span>
     );
@@ -127,6 +133,7 @@ const UserModal = ({ isOpen, onClose, user, onSave, loading }) => {
                                 >
                                     <option value="Administrador">Administrador</option>
                                     <option value="Técnico">Técnico</option>
+                                    <option value="Project Manager">Project Manager</option>
                                 </select>
                             </div>
 
@@ -325,6 +332,7 @@ const Usuarios = () => {
                         <option value="all">Todos los Roles</option>
                         <option value="Administrador">Administradores</option>
                         <option value="Técnico">Técnicos</option>
+                        <option value="Project Manager">Project Managers</option>
                     </select>
                 </div>
             </div>

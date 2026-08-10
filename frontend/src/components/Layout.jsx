@@ -77,6 +77,14 @@ const UserHeader = ({ user, onLogout }) => {
     );
 };
 
+// Routes each role is allowed to visit. Roles not listed here default to Operaciones only.
+const ROLE_ROUTES = {
+    'Administrador': ['/dashboard', '/usuarios', '/pedidos', '/operaciones'],
+    'Project Manager': ['/dashboard', '/operaciones'],
+    'Técnico': ['/operaciones'],
+};
+const DEFAULT_ROUTES = ['/operaciones'];
+
 const Layout = () => {
     const navigate = useNavigate();
     const [isSidebarOpen, setSidebarOpen] = useState(false);
@@ -94,10 +102,9 @@ const Layout = () => {
             const parsedUser = JSON.parse(userData);
             setUser(parsedUser);
 
-            // Redirect technicians away from admin routes
-            const isAdmin = parsedUser.role === 'Administrador';
-            const adminRoutes = ['/dashboard', '/usuarios', '/pedidos'];
-            if (!isAdmin && adminRoutes.includes(window.location.pathname)) {
+            // Redirect users away from routes their role can't access
+            const allowedRoutes = ROLE_ROUTES[parsedUser.role] || DEFAULT_ROUTES;
+            if (!allowedRoutes.includes(window.location.pathname)) {
                 navigate('/operaciones');
             }
         }
@@ -109,12 +116,13 @@ const Layout = () => {
         navigate('/');
     };
 
-    const isAdmin = user?.role === 'Administrador';
+    const allowedRoutes = ROLE_ROUTES[user?.role] || DEFAULT_ROUTES;
+    const hasSidebar = allowedRoutes.length > 1;
 
     return (
-        <div className={`app-layout ${!isAdmin ? 'no-sidebar' : ''}`}>
-            {/* Mobile Header Toggle - Visible for admins OR on mobile screens for any user */}
-            {(isAdmin || window.innerWidth <= 768) && (
+        <div className={`app-layout ${!hasSidebar ? 'no-sidebar' : ''}`}>
+            {/* Mobile Header Toggle - Visible for roles with a sidebar OR on mobile screens for any user */}
+            {(hasSidebar || window.innerWidth <= 768) && (
                 <button
                     className="mobile-toggle-btn"
                     onClick={() => setSidebarOpen(!isSidebarOpen)}
@@ -124,7 +132,7 @@ const Layout = () => {
                 </button>
             )}
 
-            {isAdmin && (
+            {hasSidebar && (
                 <>
                     {/* Backdrop for mobile */}
                     <AnimatePresence>
@@ -150,10 +158,10 @@ const Layout = () => {
                         </div>
 
                         <nav className="nav-menu">
-                            <SidebarItem to="/dashboard" icon={LayoutDashboard} label="Dashboard" onClick={handleNavClick} />
-                            <SidebarItem to="/usuarios" icon={Users} label="Usuarios" onClick={handleNavClick} />
-                            <SidebarItem to="/pedidos" icon={FileText} label="Pedidos" onClick={handleNavClick} />
-                            <SidebarItem to="/operaciones" icon={ClipboardList} label="Operaciones" onClick={handleNavClick} />
+                            {allowedRoutes.includes('/dashboard') && <SidebarItem to="/dashboard" icon={LayoutDashboard} label="Dashboard" onClick={handleNavClick} />}
+                            {allowedRoutes.includes('/usuarios') && <SidebarItem to="/usuarios" icon={Users} label="Usuarios" onClick={handleNavClick} />}
+                            {allowedRoutes.includes('/pedidos') && <SidebarItem to="/pedidos" icon={FileText} label="Pedidos" onClick={handleNavClick} />}
+                            {allowedRoutes.includes('/operaciones') && <SidebarItem to="/operaciones" icon={ClipboardList} label="Operaciones" onClick={handleNavClick} />}
                         </nav>
 
                         <div className="sidebar-footer" style={{ border: 'none', padding: 0 }}>

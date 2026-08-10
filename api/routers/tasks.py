@@ -6,7 +6,7 @@ from services.blob_service import blob_service
 from models import Task
 from services.table_service import table_service
 from core.config import settings
-from dependencies import get_current_user
+from dependencies import get_current_user, check_can_edit_tasks
 
 router = APIRouter(prefix="/tasks", tags=["Tasks"])
 
@@ -65,7 +65,7 @@ class TaskCompleteRequest(BaseModel):
     equipment_not_found: bool = False
 
 @router.put("/{task_id}/complete")
-async def complete_task(task_id: str, payload: TaskCompleteRequest, current_user: dict = Depends(get_current_user)):
+async def complete_task(task_id: str, payload: TaskCompleteRequest, current_user: dict = Depends(check_can_edit_tasks)):
     try:
         from services.blob_service import blob_service
         
