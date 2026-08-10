@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Response, Request, Depends
+from fastapi import APIRouter, HTTPException, Response, Depends
 from typing import List, Optional
 from pydantic import BaseModel
 from datetime import datetime
@@ -24,19 +24,21 @@ async def get_evidence_proxy(blob_path: str):
     return Response(content=content, media_type=content_type)
 
 @router.get("", response_model=List[dict])
-async def get_tasks(request: Request = None, current_user: dict = Depends(get_current_user)):
+async def get_tasks(current_user: dict = Depends(get_current_user)):
     try:
         tasks_data = table_service.get_sync_data(settings.AZURE_TABLE_TASKS, None)
         
-        # Determine base URL dynamically or fallback to localhost
-        if request:
-            base_url = str(request.base_url).rstrip('/')
-        else:
-            base_url = "http://localhost:8000"
+        # Behind Azure Static Web Apps, the request the Function App actually
+        # receives comes from SWA's internal proxy, so request.base_url reflects
+        # an internal hostname rather than the public site the browser is on.
+        # Use a relative URL there (resolved by the browser against the current
+        # page, exactly like every other /api/* call the frontend makes) and
+        # only prefix a host when PUBLIC_API_URL is explicitly set (local dev,
+        # where the frontend runs on a different origin from the API).
+        base_url = settings.PUBLIC_API_URL.rstrip('/') if settings.PUBLIC_API_URL else ""
 
         # Rewrite evidence URLs to use local proxy
-        # NOTE: base_url already includes root_path ("/api"), so this must NOT repeat it
-        base_proxy_url = "/tasks/evidence"
+        base_proxy_url = "/api/tasks/evidence"
         for task in tasks_data:
             for field in ["evidence_tag", "evidence_before", "evidence_during", "evidence_after"]:
                 url = task.get(field)
