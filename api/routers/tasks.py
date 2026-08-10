@@ -90,10 +90,22 @@ async def complete_task(task_id: str, payload: TaskCompleteRequest, current_user
         target_folder = f"{year_month}/{order_id}"
         
         # 2. Upload images with specific naming: [Aviso]_X
-        img_tag = blob_service.upload_base64_image(payload.evidence_etiqueta, target_folder, f"{task_id}_1")
-        img_before = blob_service.upload_base64_image(payload.evidence_antes, target_folder, f"{task_id}_2")
-        img_during = blob_service.upload_base64_image(payload.evidence_durante, target_folder, f"{task_id}_3")
-        img_after = blob_service.upload_base64_image(payload.evidence_despues, target_folder, f"{task_id}_4")
+        # Only re-upload when the client actually sent a fresh base64 image.
+        # Otherwise keep whatever URL is already stored: the payload field may
+        # instead contain the proxy URL the frontend was just displaying
+        # (e.g. re-submitting a task without touching its evidence), and
+        # persisting that back would overwrite the real Azure Blob URL with a
+        # non-canonical proxy link that later requests can't rewrite.
+        def resolve_evidence(existing_value, new_value, filename):
+            if new_value and new_value.startswith("data:image"):
+                uploaded = blob_service.upload_base64_image(new_value, target_folder, filename)
+                return uploaded if uploaded else existing_value
+            return existing_value
+
+        img_tag = resolve_evidence(task_entity.get('evidence_tag'), payload.evidence_etiqueta, f"{task_id}_1")
+        img_before = resolve_evidence(task_entity.get('evidence_before'), payload.evidence_antes, f"{task_id}_2")
+        img_during = resolve_evidence(task_entity.get('evidence_during'), payload.evidence_durante, f"{task_id}_3")
+        img_after = resolve_evidence(task_entity.get('evidence_after'), payload.evidence_despues, f"{task_id}_4")
 
         # 3. Update Azure Table with real URLs
         update_data = {
