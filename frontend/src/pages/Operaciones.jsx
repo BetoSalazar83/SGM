@@ -28,14 +28,18 @@ const MOCK_TASKS = [
     { id: 'AV-2024-99', orderId: 'PED-2024-002', year: '2024', month: '02', assetId: 'EQ-888', assetNumber: '44011217', type: 'Preventivo', asset: 'Generador Princ.', location: 'Cuarto Máq.', status: 'Pendiente', priority: 'high' },
 ];
 
-const EvidenceSlot = ({ label, onUpload, image }) => {
+const EvidenceSlot = ({ label, onUpload, image, disabled }) => {
     return (
-        <div className="evidence-box" onClick={() => document.getElementById(`upload-${label}`).click()}>
+        <div
+            className="evidence-box"
+            style={disabled ? { cursor: 'default', opacity: image ? 1 : 0.6 } : undefined}
+            onClick={() => !disabled && document.getElementById(`upload-${label}`).click()}
+        >
             {image ? (
                 <>
                     <img src={image} alt={label} />
                     <div className="evidence-check"><CheckCircle size={14} /></div>
-                    <div className="evidence-change-badge">Reemplazar</div>
+                    {!disabled && <div className="evidence-change-badge">Reemplazar</div>}
                 </>
             ) : (
                 <>
@@ -48,6 +52,7 @@ const EvidenceSlot = ({ label, onUpload, image }) => {
                 type="file"
                 accept="image/*"
                 hidden
+                disabled={disabled}
                 onChange={(e) => {
                     const file = e.target.files[0];
                     if (file) {
@@ -63,7 +68,7 @@ const EvidenceSlot = ({ label, onUpload, image }) => {
     );
 };
 
-const TaskDetail = ({ task, onClose, onComplete }) => {
+const TaskDetail = ({ task, onClose, onComplete, isReadOnly }) => {
     const [evidence, setEvidence] = useState({
         etiqueta: task.evidence_tag || null,
         antes: task.evidence_before || null,
@@ -236,10 +241,10 @@ const TaskDetail = ({ task, onClose, onComplete }) => {
                         Capture las 4 fotos requeridas para cerrar la orden.
                     </p>
                     <div className="evidence-grid">
-                        <EvidenceSlot label="Etiqueta" image={evidence.etiqueta} onUpload={(url) => handleUpload('etiqueta', url)} />
-                        <EvidenceSlot label="Antes" image={evidence.antes} onUpload={(url) => handleUpload('antes', url)} />
-                        <EvidenceSlot label="Durante" image={evidence.durante} onUpload={(url) => handleUpload('durante', url)} />
-                        <EvidenceSlot label="Después" image={evidence.despues} onUpload={(url) => handleUpload('despues', url)} />
+                        <EvidenceSlot label="Etiqueta" image={evidence.etiqueta} onUpload={(url) => handleUpload('etiqueta', url)} disabled={isReadOnly} />
+                        <EvidenceSlot label="Antes" image={evidence.antes} onUpload={(url) => handleUpload('antes', url)} disabled={isReadOnly} />
+                        <EvidenceSlot label="Durante" image={evidence.durante} onUpload={(url) => handleUpload('durante', url)} disabled={isReadOnly} />
+                        <EvidenceSlot label="Después" image={evidence.despues} onUpload={(url) => handleUpload('despues', url)} disabled={isReadOnly} />
                     </div>
                 </div>
 
@@ -247,10 +252,11 @@ const TaskDetail = ({ task, onClose, onComplete }) => {
                 <div className="info-section closing-section">
                     <h3>Cierre de Orden</h3>
 
-                    <label className="not-found-checkbox-container" onClick={() => setEquipmentNotFound(!equipmentNotFound)}>
+                    <label className="not-found-checkbox-container" onClick={() => !isReadOnly && setEquipmentNotFound(!equipmentNotFound)}>
                         <input
                             type="checkbox"
                             checked={equipmentNotFound}
+                            disabled={isReadOnly}
                             onChange={(e) => setEquipmentNotFound(e.target.checked)}
                             onClick={(e) => e.stopPropagation()}
                         />
@@ -265,24 +271,27 @@ const TaskDetail = ({ task, onClose, onComplete }) => {
                         placeholder="Comentarios finales, observaciones o repuestos utilizados..."
                         value={comments}
                         onChange={(e) => setComments(e.target.value)}
+                        readOnly={isReadOnly}
                     ></textarea>
                 </div>
             </div>
 
-            <div className="action-bar">
-                <button
-                    className="glass-button btn-primary"
-                    style={{ width: '100%', opacity: isComplete && !isSubmitting ? 1 : 0.5 }}
-                    disabled={!isComplete || isSubmitting}
-                    onClick={handleSubmit}
-                >
-                    <CheckCircle size={18} />
-                    <span>
-                        {isSubmitting ? 'Cerrando...' :
-                            (task.status === 'Atendido' ? 'Actualizar y Guardar' : 'Confirmar y Cerrar')}
-                    </span>
-                </button>
-            </div>
+            {!isReadOnly && (
+                <div className="action-bar">
+                    <button
+                        className="glass-button btn-primary"
+                        style={{ width: '100%', opacity: isComplete && !isSubmitting ? 1 : 0.5 }}
+                        disabled={!isComplete || isSubmitting}
+                        onClick={handleSubmit}
+                    >
+                        <CheckCircle size={18} />
+                        <span>
+                            {isSubmitting ? 'Cerrando...' :
+                                (task.status === 'Atendido' ? 'Actualizar y Guardar' : 'Confirmar y Cerrar')}
+                        </span>
+                    </button>
+                </div>
+            )}
         </motion.div>
     );
 };
@@ -292,6 +301,10 @@ const Operaciones = () => {
     const [selectedTask, setSelectedTask] = useState(null);
     const [tasks, setTasks] = useState([]);
     const [loading, setLoading] = useState(true);
+
+    const storedUser = localStorage.getItem('sgm_user');
+    const currentUser = storedUser ? JSON.parse(storedUser) : null;
+    const isReadOnly = currentUser?.role === 'Project Manager';
 
     const { isOnline, pendingCount, getAllQueueItems, processQueue, checkRealConnectivity } = useSyncQueue((syncedId) => {
         setTasks(prev => prev.map(t => t.id === syncedId ? { ...t, status: 'Atendido' } : t));
@@ -649,6 +662,7 @@ const Operaciones = () => {
                         task={selectedTask}
                         onClose={() => setSelectedTask(null)}
                         onComplete={handleCloseTask}
+                        isReadOnly={isReadOnly}
                     />
                 )}
             </AnimatePresence>

@@ -56,3 +56,15 @@ async def check_admin(current_user: dict = Depends(get_current_user)):
             detail="Se requieren permisos de administrador"
         )
     return current_user
+
+# Roles that can only view Operaciones, not complete/save maintenance tasks
+READ_ONLY_TASK_ROLES = {'Project Manager'}
+
+# Dependency to block read-only roles from writing tasks
+async def check_can_edit_tasks(current_user: dict = Depends(get_current_user)):
+    if current_user.get('role') in READ_ONLY_TASK_ROLES:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Tu rol solo tiene acceso de lectura a Operaciones"
+        )
+    return current_user
