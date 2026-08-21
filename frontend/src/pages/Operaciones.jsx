@@ -28,6 +28,40 @@ const MOCK_TASKS = [
     { id: 'AV-2024-99', orderId: 'PED-2024-002', year: '2024', month: '02', assetId: 'EQ-888', assetNumber: '44011217', type: 'Preventivo', asset: 'Generador Princ.', location: 'Cuarto Máq.', status: 'Pendiente', priority: 'high' },
 ];
 
+// Azure Static Web Apps caps request bodies at 30MB. Phone cameras routinely
+// shoot 12MP+ photos that, once base64-encoded, blow past that limit when
+// 4 of them are sent together — so downscale + re-encode as JPEG here before
+// the image ever becomes a base64 string.
+const compressImage = (file, maxDimension = 1600, quality = 0.75) => {
+    return new Promise((resolve, reject) => {
+        const objectUrl = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => {
+            let { width, height } = img;
+            if (width > maxDimension || height > maxDimension) {
+                if (width > height) {
+                    height = Math.round(height * (maxDimension / width));
+                    width = maxDimension;
+                } else {
+                    width = Math.round(width * (maxDimension / height));
+                    height = maxDimension;
+                }
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+            URL.revokeObjectURL(objectUrl);
+            resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.onerror = (err) => {
+            URL.revokeObjectURL(objectUrl);
+            reject(err);
+        };
+        img.src = objectUrl;
+    });
+};
+
 const EvidenceSlot = ({ label, onUpload, image, disabled }) => {
     return (
         <div
@@ -53,13 +87,16 @@ const EvidenceSlot = ({ label, onUpload, image, disabled }) => {
                 accept="image/*"
                 hidden
                 disabled={disabled}
-                onChange={(e) => {
+                onChange={async (e) => {
                     const file = e.target.files[0];
-                    if (file) {
+                    if (!file) return;
+                    try {
+                        const compressed = await compressImage(file);
+                        onUpload(compressed); // Base64 JPEG, downscaled to fit the request size limit
+                    } catch (err) {
+                        console.error("Error compressing image, falling back to raw upload:", err);
                         const reader = new FileReader();
-                        reader.onloadend = () => {
-                            onUpload(reader.result); // This is the Base64 string
-                        };
+                        reader.onloadend = () => onUpload(reader.result);
                         reader.readAsDataURL(file);
                     }
                 }}
